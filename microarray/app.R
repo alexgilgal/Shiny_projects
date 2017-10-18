@@ -8,56 +8,90 @@ library(gplots)
 
 # User interface ----
 ui <- fluidPage(
-  titlePanel("stockVis"),
+  titlePanel("Microarray Analisys"),
   
   sidebarLayout(
     sidebarPanel(
-      helpText("Select a stock to examine. 
-        Information will be collected from Google finance."),
+      helpText("Select a target file. Remember that the target file
+               MUST have these columns: FileName Cy3 Cy5"),
+      # Input: Select a file ----
       
-      textInput("symb", "Symbol", "SPY"),
+      fileInput('target', 'Choose the target file'),
       
-      dateRangeInput("dates", 
-                     "Date range",
-                     start = "2013-01-01", 
-                     end = as.character(Sys.Date())),
+      # Raw data selection
       
-      br(),
-      br(),
       
-      checkboxInput("log", "Plot y axis on log scale", 
-                    value = FALSE),
+      helpText('Now upload here all the raw data files'),
       
-      checkboxInput("adjust", 
-                    "Adjust prices for inflation", value = FALSE)
+      fileInput('raw_files', 'Upload Raw files', multiple = T),
+      
+      # Scanning sofware
+      
+      helpText('Select the scanning software used to generate raw files'),
+      
+      selectInput('source', 'Scanning program',
+                  choices = list('Bluefuse' = 'bluefuse',
+                                 'Others' = 'other')),
+      # Reference channel
+      
+      helpText('Which channel is the reference? 
+               This information is at the targets file'),
+      
+      selectInput('ref', 'Reference Channel', 
+                  choices = list('Cy3' = 'Cy3',
+                                 'Cy5' = 'Cy5')),
+      
+      # Statistical significance
+      
+      helpText('Select the Statistical significance threshold'),
+      
+      selectInput('fdr_pvalue', 'Select FDR
+                  or p-value ',
+                  choices = list('FDR (Recomended)' = 'fdr',
+                                 'P Value (Strongly not recomended)' = 'pvalue')),
+      
+      sliderInput('alpha', 'Select the significance threshold',
+                  min = 0.0001, max = 0.99, value = 0.05, step = 0.001)
+    
+      
+      
+      
+    
     ),
     
-    mainPanel(plotOutput("plot"))
+    mainPanel(h3('Raw Data exploration'),
+              
+              tableOutput("contents")
+              
+              
+              
+    )
   )
 )
 
 # Server logic
 server <- function(input, output) {
   
-  dataInput <- reactive({
-    getSymbols(input$symb, src = "google",
-               from = input$dates[1],
-               to = input$dates[2],
-               auto.assign = FALSE)
-  })
+  # raw data exploration ----
   
-  finalInput <- reactive({
-    if (!input$adjust) return(dataInput())
-    adjust(dataInput())
-  })
+  target <- reactive({})
   
-  output$plot <- renderPlot({   
-    data <- dataInput()
-    if (input$adjust) data <- adjust(dataInput())
+  
+  output$contents <- renderTable({
     
-    chartSeries(data, theme = chartTheme("white"),
-                type = "line", log.scale = input$log, TA = NULL)
+    # input$file1 will be NULL initially. After the user selects
+    # and uploads a file, head of that data file by default,
+    # or all rows if selected, will be shown.
+    
+    req(input$target)
+    
+    df <- readTargets(input$target$datapath)
+
+    
   })
+
+  
+  
 }
 
 # Run the app
