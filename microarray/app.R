@@ -93,11 +93,12 @@ server <- function(input, output) {
       
   } else {
     
-    rg <- read.maimages(readTargets(input$target$name,
-                                    path = gsub('[0123456789].txt', '',
-                                                input$target$datapath[1],
-                                                perl = T)),
-                        
+    targets <- read.delim(input$target$name,
+                          path = gsub('[0123456789].txt', '',
+                                      input$target$datapath[1],
+                                      perl = T))
+    
+    rg <- read.maimages(targets,
                         source = input$source,
                         path = gsub('[0123456789].xls', '',
                                     input$raw_files$datapath[1],
