@@ -6,6 +6,12 @@ library(Vennerable)
 library(xlsx)
 library(gplots)
 
+# Demo data loading
+
+targets_demo <- readTargets('data/Targets.txt')
+
+rg_demo <- read.maimages(targets_demo, source = 'bluefuse',path = 'data/')
+
 # User interface ----
 ui <- fluidPage(
   titlePanel("Microarray Analisys"),
@@ -61,7 +67,9 @@ ui <- fluidPage(
     
     mainPanel(h3('Raw Data exploration'),
               
-              tableOutput("contents")
+              plotOutput('raw_box'),
+              verbatimTextOutput('rg'),
+              tableOutput('probes')
               
               
               
@@ -70,25 +78,60 @@ ui <- fluidPage(
 )
 
 # Server logic
+
 server <- function(input, output) {
   
-  # raw data exploration ----
   
-  target <- reactive({})
+  # Making posible to load other files than the demo.
+  # The reactive function allows to use the demo files or the others
   
-  
-  output$contents <- renderTable({
+  rg <- reactive({
     
-    # input$file1 will be NULL initially. After the user selects
-    # and uploads a file, head of that data file by default,
-    # or all rows if selected, will be shown.
+    if(is.null(input$target)){
+      print('using demo')
+    return(rg_demo)
+      
+  } else {
     
-    req(input$target)
-    
-    df <- readTargets(input$target$datapath)
-
+    rg <- read.maimages(readTargets(input$target$name,
+                                    path = gsub('[0123456789].txt', '',
+                                                input$target$datapath[1],
+                                                perl = T)),
+                        
+                        source = input$source,
+                        path = gsub('[0123456789].xls', '',
+                                    input$raw_files$datapath[1],
+                                    perl = T) )
+    print('using data')
+    return(rg)
+  }
     
   })
+  
+  output$raw_box <- renderPlot({
+
+    boxplot(cbind(log2(rg()$G), log2(rg()$R)), main = 'Raw data boxplot',
+            ylab = 'log2(Intensity)', xaxt='n',
+            col = c(rep('green', dim(rg()$G)[2]), rep('red', dim(rg()$G)[2])))
+    })
+  output$rg <- renderPrint({
+    input$target
+    
+  })
+  
+  output$probes <- renderTable({
+    
+      # ' Class Target: \n', class(input$target),
+          # 'path:', input$target,
+          # ' Class Files: \n', class(input$raw_files),
+          # head(input$raw_files, n = nrow(input$raw_files))
+    head(readTargets(input$target$name,
+                     path = gsub('[0123456789].txt', '',
+                                 input$target$datapath[1],
+                                 perl = T)))
+  })
+  
+
 
   
   
