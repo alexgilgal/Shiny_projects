@@ -73,11 +73,15 @@ ui <- fluidPage(
               
               plotOutput('raw_box'),
               verbatimTextOutput('rg'),
-              tableOutput('probes')
+              tableOutput('probes'),
+              plotOutput('MA_raw'),
+              plotOutput('density_raw')
               
           ),
       tabPanel('Normalized data',
-               h3('Normalized data'))
+               h3('Normalized data'),
+               plotOutput('MA_norm'),
+               plotOutput('density_norm'))
   )
 )
 )
@@ -119,16 +123,53 @@ server <- function(input, output) {
     
   })
   
+  # definition of normalized data ------
+  
+  norm <- reactive({
+    
+    # Background correction
+    
+    back <- backgroundCorrect(rg(), method="normexp", offset=50)  
+    
+    # within array normalization
+    
+    within <- normalizeWithinArrays(back, method="loess")
+    
+    # between arrays normalization
+    
+    norm <- normalizeBetweenArrays(within, method="Aquantile")
+    
+    return(norm)
+    
+    
+  })
+  
+  
+  # Definition of the outputs ----
+  
+  # Raw boxplot
+  
   output$raw_box <- renderPlot({
 
     boxplot(cbind(log2(rg()$G), log2(rg()$R)), main = 'Raw data boxplot',
             ylab = 'log2(Intensity)', xaxt='n',
             col = c(rep('green', dim(rg()$G)[2]), rep('red', dim(rg()$G)[2])))
     })
+  
+  # Raw density plot
+  
+  output$density_raw <- renderPlot({
+    
+    plotDensities(rg(), main = 'Raw density plot')
+  })
+  
+  # How raw files looks like. ELIMINATE WHEN ENDED
   output$rg <- renderPrint({
     input$raw_files
     
   })
+  
+  # ANOTHER OUTPUT TO MAKE PROBES
   
   output$probes <- renderTable({
     
@@ -140,8 +181,28 @@ server <- function(input, output) {
     
   })
   
-
-
+  # raw MA plot
+  
+  output$MA_raw <- renderPlot({
+    limma::plotMA(rg(), main = 'MAplot of raw data')
+  })
+  
+  # Normalized MA plot
+  
+  output$MA_norm <- renderPlot({
+    
+    limma::plotMA(norm(), main = 'MAplot of normalized data')
+    
+  })
+  
+  # normalized density plot
+  
+  output$density_norm <- renderPlot({
+    
+    plotDensities(norm(), main = 'Normalized density plot')
+    
+  })
+  
   
   
 }
