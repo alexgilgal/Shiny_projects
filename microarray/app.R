@@ -65,16 +65,22 @@ ui <- fluidPage(
     
     ),
     
-    mainPanel(h3('Raw Data exploration'),
+    mainPanel(tabsetPanel(
+      
+      tabPanel("Raw data",
+      
+      h3('Raw Data exploration'),
               
               plotOutput('raw_box'),
               verbatimTextOutput('rg'),
               tableOutput('probes')
               
-              
-              
-    )
+          ),
+      tabPanel('Normalized data',
+               h3('Normalized data'))
   )
+)
+)
 )
 
 # Server logic
@@ -87,23 +93,27 @@ server <- function(input, output) {
   
   rg <- reactive({
     
+    # If there is no data input we will show only a few samples
+    
     if(is.null(input$target)){
-      print('using demo')
+      
     return(rg_demo)
       
   } else {
     
-    targets <- read.delim(input$target$name,
-                          path = gsub('[0123456789].txt', '',
-                                      input$target$datapath[1],
-                                      perl = T))
+    # but if the input is defined, we will use the input files
     
-    rg <- read.maimages(targets,
-                        source = input$source,
-                        path = gsub('[0123456789].xls', '',
-                                    input$raw_files$datapath[1],
-                                    perl = T) )
+    targets <- readTargets(input$target$datapath)
+    
+    rg <- read.maimages(input$raw_files$datapath,
+                        source = input$source )
     print('using data')
+    
+    rg$targets <- targets
+    
+    colnames(rg$G) <- rownames(targets)
+    colnames(rg$R) <- rownames(targets)
+    
     return(rg)
   }
     
@@ -116,7 +126,7 @@ server <- function(input, output) {
             col = c(rep('green', dim(rg()$G)[2]), rep('red', dim(rg()$G)[2])))
     })
   output$rg <- renderPrint({
-    input$target
+    input$raw_files
     
   })
   
@@ -126,10 +136,8 @@ server <- function(input, output) {
           # 'path:', input$target,
           # ' Class Files: \n', class(input$raw_files),
           # head(input$raw_files, n = nrow(input$raw_files))
-    head(readTargets(input$target$name,
-                     path = gsub('[0123456789].txt', '',
-                                 input$target$datapath[1],
-                                 perl = T)))
+    head(read.delim(input$target$datapath))
+    
   })
   
 
