@@ -2,7 +2,6 @@
 library(shiny)
 library(limma)
 library(scatterplot3d)
-library(Vennerable)
 library(xlsx)
 library(gplots)
 
@@ -36,7 +35,8 @@ ui <- fluidPage(
       helpText('Select the scanning software used to generate raw files'),
       
       selectInput('source', 'Scanning program',
-                  choices = list('Bluefuse' = 'bluefuse',
+                  choices = list('Agilent: Feature Extraction' = 'agilent',
+                                 'Bluefuse' = 'bluefuse',
                                  'Others' = 'other')),
       # Reference channel ----
       
@@ -74,8 +74,6 @@ ui <- fluidPage(
       h3('Raw Data exploration'),
               
               plotOutput('raw_box'),
-              verbatimTextOutput('rg'),
-              tableOutput('probes'),
               plotOutput('MA_raw'),
               plotOutput('density_raw')
               
@@ -109,14 +107,16 @@ ui <- fluidPage(
                                           'No' = F)),
                
                textInput('contrasts', 'Comparison(s),
-                         remember to not use spaces:'),
+                         remember to not use spaces:',
+                         value = 'AC-Cntrl'),
                
                p('Now you can see some results according to the FDR and 
                  |log2(FC)| selected. Type below the comparison you want to 
                  see (the 20 most significants genes). For example you can type
                  AC-Cntrl if you are running the demo data'),
                
-               textInput('top_contrast', 'Comparison of interest:'),
+               textInput('top_contrast', 'Comparison of interest:',
+                         value = 'AC-Cntrl'),
                
                tableOutput('top_table'),
                
@@ -157,8 +157,10 @@ server <- function(input, output) {
     targets <- readTargets(input$target$datapath)
     
     rg <- read.maimages(input$raw_files$datapath,
-                        source = input$source )
-    print('using data')
+                        source = input$source)
+    
+    print(input$source)
+    
     
     rg$targets <- targets
     
@@ -210,23 +212,7 @@ server <- function(input, output) {
     plotDensities(rg(), main = 'Raw density plot')
   })
   
-  # How raw files looks like. ELIMINATE WHEN ENDED
-  output$rg <- renderPrint({
-    rg()$targets$Cy5
-    
-  })
-  
-  # ANOTHER OUTPUT TO MAKE PROBES
-  
-  output$probes <- renderTable({
-    
-      # ' Class Target: \n', class(input$target),
-          # 'path:', input$target,
-          # ' Class Files: \n', class(input$raw_files),
-          # head(input$raw_files, n = nrow(input$raw_files))
-    head(read.delim(input$target$datapath))
-    
-  })
+
   
   # raw MA plot
   
@@ -385,7 +371,9 @@ server <- function(input, output) {
   
   output$top_table <- renderTable({
     
-    top_table <- toptable(DE_fit(), number = Inf, coef = input$top_contrast)
+    top_table <- toptable(DE_fit(), number = Inf,
+                          coef = input$top_contrast,
+                          genelist = DE_fit()$genes)
     
     if(input$fdr_pvalue == 'fdr' ){
       
@@ -397,7 +385,8 @@ server <- function(input, output) {
                                top_table$P.Value < input$alpha,]
     }
     
-    return(head(interest, n= 20))
+    head(interest[,c(7:12)], n = 20)
+    
     
   })
   
