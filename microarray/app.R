@@ -118,7 +118,14 @@ ui <- fluidPage(
                
                textInput('top_contrast', 'Comparison of interest:'),
                
-               tableOutput('top_table')
+               tableOutput('top_table'),
+               
+               p('Here you can dowload the tables in a single xlsx file. If
+                 there are multiple comparisons, they will be located in
+                 different sheets of the file.'),
+               textInput('f_tittle', 'File name:'),
+               
+               downloadButton("downloadData", "Download the table in xlsx")
                
                
                )
@@ -127,7 +134,7 @@ ui <- fluidPage(
 )
 )
 
-# Server logic
+# Server logic -----
 
 server <- function(input, output) {
   
@@ -394,6 +401,38 @@ server <- function(input, output) {
     
   })
   
+  output$downloadData <- downloadHandler(
+    
+    filename = reactive({
+      
+      paste(input$f_tittle, '.xlsx', sep = "")
+      
+      print(input$f_tittle)
+      }),
+
+    
+    content = function(file){
+      
+      top_table <- toptable(DE_fit(), number = Inf, coef = input$top_contrast)
+      
+      interest <- top_table[ abs(top_table$logFC) > input$fc &
+                                top_table$P.Value < input$alpha,]
+      
+      write.xlsx(interest, file, row.names = FALSE,
+                 sheetName = input$top_contrast)
+      
+    }
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+  )
 }
 
 # Run the app
