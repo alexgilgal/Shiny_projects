@@ -53,8 +53,8 @@ ui <- fluidPage(
       
       selectInput('fdr_pvalue', 'Select FDR
                   or p-value ',
-                  choices = list('FDR (Recomended)' = 'fdr',
-                                 'P Value (Strongly not recomended)' = 'pvalue')),
+                  choices = list('FDR (Recomended)' = 'adj.P.Val',
+                            'P Value (Strongly not recomended)' = 'P.Value')),
       
       sliderInput('alpha', 'Select the significance threshold',
                   min = 0.001, max = 0.5, value = 0.05, step = 0.01),
@@ -67,7 +67,85 @@ ui <- fluidPage(
     
     ),
     
-    mainPanel(tabsetPanel(
+    mainPanel(
+      
+      tabsetPanel(
+      
+      tabPanel("Introduction",
+               
+               
+                  
+              h3("Introduction"),
+                  
+              p("This Shiny App is an interactive version of the limma
+                package. This tool is designed for those users that 
+                are not famirialized with R or programming. The main
+                objective of this tool is to make microarray analysis
+                using the power of limma, without knowing R programming.
+                "),
+                  
+                h4("Target file"),
+                  
+                p("The first input that has to be defined in this tool
+                  is a Target.txt file. This file MUST contain the
+                  following header: FileName Cy3 Cy5. The Cy5 column is
+                  only required if the experiment is two color channel.
+                  In the FileName colum the user should include the 
+                  files names that will be included in the analysis.
+                  If the analysis is based in a two color chip, one of the 
+                  Cy3 or Cy5 column should contain the word Ref in all
+                  the rows, because that channel contains the reference 
+                  DNA. The other column should have the treatment
+                  conditions. You can see an example of the structure 
+                  of a target file for a two channel and single channel
+                  experiment below."),
+              
+              h5('Two channel example (Reference channel is Cy3):'),
+                  
+                tableOutput("target_example"),
+              
+              h5('Single channel example:'),
+              
+              tableOutput('target_example_single'),
+              
+                h4("Raw files and source program"),
+              
+              p('The next input in this tool are the raw files that are
+                specified in the target file. The format of these files
+                can be different from one experiment to another, since
+                the chips are different. Because of this, the next input
+                to the tool is a selection box where you can choose the 
+                program that has generated those raw files. By default,
+                the tool asumes that Agilent Feature Extraction Software
+                has been used.'),
+              
+              h4('Reference channel and single channel experiments'),
+              
+              p('If your experiment is based on a two color chip, 
+                one of the channels should contain the reference DNA. In
+                our example, the Cy3 channel contains the Ref signature in 
+                the target file, so Cy3 is the reference channel.'),
+              
+              p('If the experiment is based on a single channel chip, 
+                leave the selector in Cy3 and remember that the 
+                target file MUST contain that column.'),
+              
+              h4('Statistical significance thresholds'),
+              
+              p('Finally you will find that you can use FDR or raw pvalue
+                in order to decide which features are statistically
+                different from one condition to the other. By default, FDR
+                is selected for testing significance, and we encourage you
+                not to use raw pvalues, since it increase type I errors.
+                Below of this selection box, you will fin two sliders that
+                set the values of the alpha significance threshold and 
+                log2(Fold Change) threshold. These values will be used 
+                when generating the xlsx file at the end.'),
+              
+              br()
+              
+               
+               ),
       
       tabPanel("Raw data",
       
@@ -123,9 +201,10 @@ ui <- fluidPage(
                p('Here you can dowload the tables in a single xlsx file. If
                  there are multiple comparisons, they will be located in
                  different sheets of the file.'),
-               textInput('f_tittle', 'File name:'),
                
-               downloadButton("downloadData", "Download the table in xlsx")
+               downloadButton("downloadData", "Download the table in xlsx"),
+               
+               br()
                
                
                )
@@ -195,6 +274,24 @@ server <- function(input, output) {
   
   
   # Definition of the outputs ----
+  
+  # Target example
+  
+  output$target_example <- renderTable({
+    
+    data.frame( FileName = c('Sample_1_AC.xlsx', 'Sample_2_AC.xlsx',
+                             'Sample_3_cntr.xlsx', 'Sample_4_cntr.xlsx'),
+                Cy3 = rep('Ref', 4),
+                Cy5 = c('AC', 'AC', 'Control', 'Control'))
+    
+  })
+  
+  output$target_example_single <- renderTable({
+    
+    data.frame( FileName = c('Sample_1_AC.xlsx', 'Sample_2_AC.xlsx',
+                             'Sample_3_cntr.xlsx', 'Sample_4_cntr.xlsx'),
+                Cy3 = c('AC', 'AC', 'Control', 'Control'))
+  })
   
   # Raw boxplot
   
@@ -289,7 +386,9 @@ server <- function(input, output) {
     
     if(input$pca_shape == '3D'){
       
-    pca3d<-scatterplot3d(x=pca.filt()$x[,1],y=pca.filt()$x[,2],z=pca.filt()$x[,3],
+    pca3d<-scatterplot3d(x=pca.filt()$x[,1],
+                         y=pca.filt()$x[,2],
+                         z=pca.filt()$x[,3],
                          xlab='PC1', ylab='PC2', zlab='PC3',
                          main='PCA Analysis',
                          pch=16,col.grid="lightblue",
@@ -313,7 +412,8 @@ server <- function(input, output) {
     
   })
   
-  # plot a table with the groups that the user can use to make the comparison.
+  # plot a table with the groups that the user can use 
+  # to make the comparison.
   
   output$groups <- renderTable({
     
@@ -374,16 +474,10 @@ server <- function(input, output) {
     top_table <- toptable(DE_fit(), number = Inf,
                           coef = input$top_contrast,
                           genelist = DE_fit()$genes)
-    
-    if(input$fdr_pvalue == 'fdr' ){
       
       interest <- top_table[ abs(top_table$logFC) > input$fc &
-                               top_table$adj.P.Value < input$alpha,]
-    } else {
-      
-      interest <- top_table[ abs(top_table$logFC) > input$fc &
-                               top_table$P.Value < input$alpha,]
-    }
+                               top_table[,input$fdr_pvalue] < input$alpha,]
+  
     
     head(interest[,c(7:12)], n = 20)
     
@@ -392,35 +486,52 @@ server <- function(input, output) {
   
   output$downloadData <- downloadHandler(
     
-    filename = reactive({
-      
-      paste(input$f_tittle, '.xlsx', sep = "")
-      
-      print(input$f_tittle)
-      }),
+    filename = 'data.xlsx',
 
     
     content = function(file){
       
-      top_table <- toptable(DE_fit(), number = Inf, coef = input$top_contrast)
+      if(input$mul_comp){
+        
+        comparisons <- as.character(unlist(strsplit(input$contrasts,
+                                                    split = ',')))
+        print(paste('comparisons: ', comparisons))
+        
+        for(i in comparisons){
+          
+          print(i)
+          
+          top_table <- toptable(DE_fit(), number = Inf,
+                                coef = i,
+                                genelist = DE_fit()$genes)
+          
+          interest <- top_table[abs(top_table$logFC) > input$fc &
+                                top_table[,input$fdr_pvalue] < input$alpha,]
+          
+          
+          write.xlsx(interest, file, row.names = FALSE,
+                     sheetName = i, append = T)
+          }
+        
+        
+      }else{
+        
+        top_table <- toptable(DE_fit(), number = Inf,
+                              coef = input$top_contrast,
+                              genelist = DE_fit()$genes)
+        
+        interest <- top_table[ abs(top_table$logFC) > input$fc &
+                                 top_table[,input$fdr_pvalue] < input$alpha,]
+        
+        write.xlsx(interest, file, row.names = FALSE,
+                   sheetName = input$top_contrast)
+      }
       
-      interest <- top_table[ abs(top_table$logFC) > input$fc &
-                                top_table$P.Value < input$alpha,]
       
-      write.xlsx(interest, file, row.names = FALSE,
-                 sheetName = input$top_contrast)
       
     }
     
-    
-    
-    
-    
-    
-    
-    
-    
-    
+  
   )
 }
 
