@@ -5,6 +5,8 @@ library(scatterplot3d)
 library(xlsx)
 library(gplots)
 
+options(shiny.maxRequestSize=30*1024^2)
+
 # Demo data loading
 
 targets_demo <- readTargets('data/Targets.txt')
@@ -17,6 +19,13 @@ ui <- fluidPage(
   
   sidebarLayout(
     sidebarPanel(
+      
+      helpText('Is your experiment single channel?'),
+      
+      selectInput('single_ch', 'Single Channel experiment?',
+                  choices = list('Yes' = T,
+                                 'No' = F)),
+      
       helpText("Select a target file. Remember that the target file
                MUST have these columns: FileName Cy3 Cy5"),
       # Input: Select a file ----
@@ -40,8 +49,10 @@ ui <- fluidPage(
                                  'Others' = 'other')),
       # Reference channel ----
       
+      
+      
       helpText('Which channel is the reference? 
-               This information is at the targets file'),
+               This information is at the targets file.'),
       
       selectInput('ref', 'Reference Channel', 
                   choices = list('Cy3' = 'Cy3',
@@ -223,52 +234,82 @@ server <- function(input, output) {
   
   rg <- reactive({
     
-    # If there is no data input we will show only a few samples
-    
-    if(is.null(input$target)){
-      
-    return(rg_demo)
-      
-  } else {
-    
-    # but if the input is defined, we will use the input files
-    
-    targets <- readTargets(input$target$datapath)
-    
-    rg <- read.maimages(input$raw_files$datapath,
-                        source = input$source)
-    
     print(input$source)
     
-    
-    rg$targets <- targets
-    
-    colnames(rg$G) <- rownames(targets)
-    colnames(rg$R) <- rownames(targets)
-    
-    return(rg)
-  }
-    
+    # If there is no data input we will show only a few samples
+
+     if(is.null(input$target)){
+  
+     return(rg_demo)
+  
+   } else {
+  
+     # but if the input is defined, we will use the input files
+  
+     targets <- readTargets(input$target$datapath)
+  
+     if(input$single_ch){
+       print('one color used')
+  
+       rg <- read.maimages(input$raw_files$datapath,
+                           source = input$source, green.only = T)
+       
+       rg$targets <- targets
+  
+       return(rg)
+  
+     }else{
+  
+       rg <- read.maimages(input$raw_files$datapath,
+                           source = input$source)
+     }
+  
+  
+     rg$targets <- targets
+  
+     colnames(rg$G) <- rownames(targets)
+     colnames(rg$R) <- rownames(targets)
+  
+     return(rg)
+   }
   })
   
   # definition of normalized data ------
   
   norm <- reactive({
     
-    # Background correction
-    
-    back <- backgroundCorrect(rg(), method="normexp", offset=50)  
-    
-    # within array normalization
-    
-    within <- normalizeWithinArrays(back, method="loess")
-    
-    # between arrays normalization
-    
-    norm <- normalizeBetweenArrays(within, method="Aquantile")
-    
-    return(norm)
-    
+    if(input$single_ch){ # If the experiment is single channel do the next:
+      
+      # Background correction
+      
+      norm <- backgroundCorrect(rg(), method = 'normexp')
+      
+      # Between array normalization
+      
+      norm <- normalizeBetweenArrays(norm, method="quantile")
+      
+      return(norm)
+      
+    }else{
+      
+      # Background correction
+      
+      norm <- backgroundCorrect(rg(), method="normexp", offset=50)  
+      
+      # within array normalization
+      
+      norm <- normalizeWithinArrays(norm, method="loess")
+      
+      
+      
+      
+      # between arrays normalization
+      
+      norm <- normalizeBetweenArrays(norm, method="quantile")
+      
+      return(norm)
+      
+    }
     
   })
   
@@ -296,11 +337,23 @@ server <- function(input, output) {
   # Raw boxplot
   
   output$raw_box <- renderPlot({
+    
+    
+    if(input$single_ch){
+      
+      boxplot(log2(rg()$E), main = 'Raw data boxplot',
+              ylab = 'log2(Intensity)', xaxt='n',
+              col = rainbow(ncol(rg()$E)))
+      
+      
+    }else{
 
     boxplot(cbind(log2(rg()$G), log2(rg()$R)), main = 'Raw data boxplot',
             ylab = 'log2(Intensity)', xaxt='n',
             col = c(rep('green', dim(rg()$G)[2]), rep('red', dim(rg()$G)[2])))
+      }
     })
+  
   
   # Raw density plot
   
@@ -310,7 +363,6 @@ server <- function(input, output) {
   })
   
 
-  
   # raw MA plot
   
   output$MA_raw <- renderPlot({
@@ -329,7 +381,8 @@ server <- function(input, output) {
   
   output$density_norm <- renderPlot({
     
-    plotDensities(norm(), main = 'Normalized density plot')
+    plotDensities(norm(), main = 'Normalized density plot',
+                  )
     
   })
   
@@ -339,7 +392,16 @@ server <- function(input, output) {
   
   pca.filt <- reactive({
     
-    prcomp(t(norm()$A), scale = TRUE )
+    if(input$single_ch){
+      
+      prcomp(t(norm()$E), scale = TRUE )
+      
+    }else{
+      
+      prcomp(t(norm()$A), scale = TRUE )
+      
+    }
+ 
     
     })
   
@@ -347,20 +409,27 @@ server <- function(input, output) {
     
     # First we choose the colors of the plot based on the targets argument
     
-    col_targets <- colnames(rg()$targets)
-    
-    
-    
-    no_select <- c(input$ref, 'FileName')
-    
-    
-    
-    sel_colunm <- col_targets[!(col_targets %in% no_select)]
-    
-   
-    
-    groups <- as.factor(rg()$targets[,sel_colunm])
-    
+    if(input$single_ch){
+      
+      groups <- as.factor(rg()$targets$Cy3)
+      
+    }else{
+      
+      col_targets <- colnames(rg()$targets)
+      
+      
+      
+      no_select <- c(input$ref, 'FileName')
+      
+      
+      
+      sel_colunm <- col_targets[!(col_targets %in% no_select)]
+      
+      
+      
+      groups <- as.factor(rg()$targets[,sel_colunm])
+      
+    }
     
     
     # we choose as many colors as categories are
@@ -417,17 +486,27 @@ server <- function(input, output) {
   
   output$groups <- renderTable({
     
-    col_targets <- colnames(rg()$targets)
-    
-    
-    
-    no_select <- c(input$ref, 'FileName')
-    
-    
-    
-    sel_colunm <- col_targets[!(col_targets %in% no_select)]
-    
-    groups <- factor(rg()$targets[,sel_colunm])
+    if(input$single_ch){
+      
+      groups <- as.factor(rg()$targets$Cy3)
+      
+    }else{
+      
+      col_targets <- colnames(rg()$targets)
+      
+      
+      
+      no_select <- c(input$ref, 'FileName')
+      
+      
+      
+      sel_colunm <- col_targets[!(col_targets %in% no_select)]
+      
+      
+      
+      groups <- as.factor(rg()$targets[,sel_colunm])
+      
+    }
     
     df <- data.frame(levels(groups))
     
@@ -441,7 +520,20 @@ server <- function(input, output) {
   
   DE_fit <- reactive({
     
-    design <- modelMatrix(rg()$targets, ref = 'Ref')
+    if(input$single_ch){
+      
+      design <- model.matrix(~ 0+factor(as.integer(
+        as.factor(norm()$targets$Cy3)
+                                                   )))
+      
+      colnames(design) <- levels(as.factor(norm()$targets$Cy3))
+      
+    }else{
+      
+      design <- modelMatrix(rg()$targets, ref = 'Ref')
+      
+    }
+    
     
     fit <- lmFit(norm(), design)
     
@@ -449,7 +541,6 @@ server <- function(input, output) {
       
       comparisons <- as.character(unlist(strsplit(input$contrasts,
                                                    split = ',')))
-      
     
     }else{
       
@@ -471,15 +562,33 @@ server <- function(input, output) {
   
   output$top_table <- renderTable({
     
-    top_table <- toptable(DE_fit(), number = Inf,
-                          coef = input$top_contrast,
-                          genelist = DE_fit()$genes)
+    # if((input$single_ch & !(input$mul_comp))){
+      
+      # top_table <- toptable(DE_fit(), number = Inf,
+      #                       genelist = DE_fit()$genes)
+      # 
+      # interest <- top_table[ abs(top_table$logFC) > input$fc &
+      #                          top_table[,input$fdr_pvalue] < input$alpha,]
+      # 
+      # 
+      # head(interest, n = 20)
+      
+    # } else {
+      
+      top_table <- toptable(DE_fit(), number = Inf,
+                            coef = input$top_contrast,
+                            genelist = DE_fit()$genes)
       
       interest <- top_table[ abs(top_table$logFC) > input$fc &
                                top_table[,input$fdr_pvalue] < input$alpha,]
-  
+      
+      
+      head(interest
+           # [,c(7:12)]
+           , n = 20)
+    # }
     
-    head(interest[,c(7:12)], n = 20)
+
     
     
   })
