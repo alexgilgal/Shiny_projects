@@ -1,4 +1,5 @@
 # Load packages ----
+
 library(shiny)
 library(limma)
 library(scatterplot3d)
@@ -169,6 +170,7 @@ ui <- fluidPage(
           ),
       tabPanel('Normalized data',
                h3('Normalized data'),
+               plotOutput('norm_box'),
                plotOutput('MA_norm'),
                plotOutput('density_norm'),
                
@@ -255,6 +257,8 @@ server <- function(input, output) {
                            source = input$source, green.only = T)
        
        rg$targets <- targets
+       
+       colnames(rg$E) <- rownames(targets)
   
        return(rg)
   
@@ -292,6 +296,9 @@ server <- function(input, output) {
       
     }else{
       
+      print('two color normalization')
+      
+      
       # Background correction
       
       norm <- backgroundCorrect(rg(), method="normexp", offset=50)  
@@ -305,7 +312,9 @@ server <- function(input, output) {
       
       # between arrays normalization
       
-      norm <- normalizeBetweenArrays(norm, method="quantile")
+      norm <- normalizeBetweenArrays(norm, method="Aquantile")
+      
+      print(class(norm))
       
       return(norm)
       
@@ -354,6 +363,28 @@ server <- function(input, output) {
       }
     })
   
+  output$norm_box <- renderPlot({
+    
+    if(input$single_ch){
+      
+      boxplot(norm()$E, main = 'Normalized data boxplot',
+              ylab = 'log2(Intensity)', xaxt='n',
+              col = rainbow(ncol(norm()$E)))
+      
+    }else{
+      
+      boxplot(norm()$M, main = 'Normalized data boxplot 
+              \n (M values)',
+              ylab = 'log2(Intensity)', xaxt='n',
+              col = rainbow(ncol(norm()$M)) )
+      
+      
+    }
+    
+    
+    
+  })
+  
   
   # Raw density plot
   
@@ -381,9 +412,12 @@ server <- function(input, output) {
   
   output$density_norm <- renderPlot({
     
-    plotDensities(norm(), main = 'Normalized density plot',
-                  )
-    
+    print(class(norm()))
+  
+      
+      limma::plotDensities(object = norm(),
+                                  main = 'Normalized density plot')
+ 
   })
   
   # PCA analysis

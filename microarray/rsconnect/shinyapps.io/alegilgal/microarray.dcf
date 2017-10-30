@@ -5,8 +5,8 @@ account: alegilgal
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 228621
-bundleId: 1044063
+bundleId: 1051632
 url: https://alegilgal.shinyapps.io/microarray/
-when: 1508931898.65999
+when: 1509365487.2129
 asMultiple: FALSE
 asStatic: FALSE
